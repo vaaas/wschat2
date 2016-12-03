@@ -3,21 +3,27 @@ body {
 	margin: 0;
 	padding: 0;
 }
-#chatarea {
+#chatarea, #textarea, #tabbar {
 	font-family: monospace;
 	font-size: 10pt;
-	background-color: cyan;
 	position: fixed;
+}
+#chatarea {
+	background-color: cyan;
 	width: 100%;
-	top: 0;
+	top: 2em;
 	bottom: 3em;
 }
 #textarea {
-	font-family: monospace;
-	font-size: 10pt;
 	border: 1px solid black;
-	position: fixed;
 	width: 100%;
 	bottom: 0;
 	height: 3em;
+}
+
+#tabbar {
+	top: 0;
+	height: 2em;
+	width: 100%;
+	background-color: pink;
 }

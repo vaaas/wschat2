@@ -6,77 +6,101 @@ function empty_object_p(obj) {
 	return (typeof(obj) === "object" && Object.keys(obj).length === 0)
 }
 
-var Message = {
-	name: function name(name) {
-		return JSON.stringify({
-			fn: "name",
-			args: [name]
-		})
+function WSDistributor () {
+	this.returnpub = new ReturnPublisher()
+	this.chanpub = new ChannelPublisher()
+	this.privpub = new PrivPublisher()
+}
+WSDistributor.prototype = {
+	distribute: function distribute (event) {
+		var obj
+		try {
+			obj = JSON.parse(event.data)
+		} catch (err) {
+			return "TODO: publish error"
+		}
+		switch(obj.fn) {
+			case "ret":
+				this.returnpub.publish(obj.args[0], obj.args[1], obj.args[2])
+				break
+			case "priv":
+				this.privpub.publish(obj.args[0], obj.args[1])
+				break
+			case "chat":
+				this.chanpub.publish("chat", obj.args)
+				break
+			case "join":
+				this.chanpub.publish("join", obj.args)
+				break
+			case "part":
+				this.chanpub.publish("part", obj.args)
+				break
+		}
 	},
-	join: function join(channel) {
-		return JSON.stringify({
-			fn: "join",
-			args: [channel]
-		})
-	},
-	part: function part(channel) {
-		return JSON.stringify({
-			fn: "part",
-			args: [channel]
-		})
-	},
-	chat: function chat(channel, msg) {
-		return JSON.stringify({
-			fn: "chat",
-			args: [channel, msg]
-		})
-	},
-	priv: function priv(user, msg) {
-		return JSON.stringify({
-			fn: "priv",
-			args: [user, msg]
-		})
+}
+
+function ReturnPublisher () {
+	this.ids = {}
+	this.lastid = null
+}
+
+function ChannelPublisher () {
+	this.channels = {}
+}
+ChannelPublisher.prototype = {
+	subscribe: function (channel, cb) { this.channels[channel] = cb }
+	unsubscribe: function (channel) { delete this.channels[channel] }
+	publish: function (type, args) {
+		if (channel in this.channels) this.channels[channel](type, args)
 	}
 }
 
-function WSInterface(connectstring) {
-	this.ws = new WebSocket(connectstring)
-	this.ws.onopen = this.on_open.bind(this)
-	this.ws.onmessage = this.on_message.bind(this)
-	this.cbs = {}
-	this.lastid = null
+function PrivPublisher () {
+	this.people = {}
 }
-WSInterface.prototype = {
-	on_open: function on_open (event) {
-		this.ws.send(Message.name("some name idk"))
-		this.ws.send(Message.join("general"))
-	},
-	on_message: function on_message (event) {
-		var obj = JSON.parse(event.data)
-		this[obj.fn](obj.args)
-	},
-	rpc: function rpc (fn, args, cb) {
-		var id
+PrivPublisher.prototype = {
+	subscribe: function (person, cb) { this.people[person] = cb }
+	unsubscribe: function (person) { delete this.people[person] }
+	publish: function (person, msg) {
+		if (person in this.people) this.people[person](msg)
+		else if (null in this.people) this.people[null](msg)
+	}
+}
+
+ReturnPublisher.prototype = {
+	sensible_id: function sensible_id () {
 		if (empty_object_p(this.cbs)) {
-			id = 0
 			this.lastid = 0
-		} else {
-			id = ++this.lastid
-		}
-		this.ws.send(JSON.stringify({
+			return 0
+		} else return ++this.lastid
+	},
+	subscribe: function subscribe (id, cb) { this.cbs[id] = cb },
+	unsubscribe: function unsubscribe (id) { delete this.cbs[id] },
+	publish: function publish(id, ok, value) {
+		this.cbs[id](ok, value)
+		this.unsubscribe(id)
+	},
+}
+
+function RPCaller (sendfn, publisher) {
+	this.send = sendfn
+	this.publisher = publisher
+}
+RPCaller.prototype = {
+	rpc: function rpc (fn, args, cb) {
+		var id = this.publisher.sensible_id()
+		this.send(JSON.stringify({
 			fn: fn,
 			args: args,
 			id: id
 		}))
-		if (cb !== undefined) this.cbs[id] = cb
+		if (cb !== undefined) this.publisher.subscribe(id, cb)
 	},
-	ret: function ret (args) {
-		var id = args[0]
-		var ok = args[1]
-		var value = args[2]
-		this.cbs[id](ok, value)
-		delete this.cbs[id]
-	},
+	priv: function name (user, msg, cb) { this.rpc("name", [user, msg], cb) },
+	join: function join (channel, cb) { this.rpc("join", [channel], cb) },
+	part: function part (channel, cb) { this.rpc("part", [channel], cb) },
+	chat: function chat (channel, msg, cb) { this.rpc("chat", [channel, msg], cb)},
+	name: function name (name, cb) { this.rpc("name", [name], cb) },
 }
 
 function TabBar () {}
@@ -89,7 +113,7 @@ function TextArea () {}
 TextArea.prototype = {}
 
 function main() {
-	var wsint = new WSInteraface(CONNECSTRING)
+	// TODO
 }
 
 window.onload = main

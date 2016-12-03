@@ -6,7 +6,7 @@ const valid = require("./valid.js")
 module.exports = function WSServer (port, hostname) {
 	const channels = {}
 	const names = {}
-	const rpcfun = {
+	const rpcmap = {
 		chat: chat,
 		name: name,
 		join: join,
@@ -33,12 +33,12 @@ module.exports = function WSServer (port, hostname) {
 		}
 		if (!valid.RPC(obj))
 			this.close("Please don't send invalid RPCs")
-		else if (!(obj.fn in rpcfun)) {
+		else if (!(obj.fn in rpcmap)) {
 			this.close("Method doesn't exist")
 		else if (!valid[obj.fn](obj.args))
 			this.close("Invalid arguments")
 		else
-			rpcfun[obj.fn](this, obj.id, ...obj.args)
+			rpcmap[obj.fn](this, obj.id, ...obj.args)
 	}
 
 	function backlog() {
