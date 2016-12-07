@@ -17,7 +17,7 @@ WSDistributor.prototype = {
 		try {
 			obj = JSON.parse(event.data)
 		} catch (err) {
-			return "TODO: publish error"
+			return console.log("JSON parsing error:", err.message)
 		}
 		switch(obj.fn) {
 			case "ret":
@@ -51,7 +51,8 @@ ChannelPublisher.prototype = {
 	subscribe: function (channel, cb) { this.channels[channel] = cb }
 	unsubscribe: function (channel) { delete this.channels[channel] }
 	publish: function (type, args) {
-		if (channel in this.channels) this.channels[channel](type, args)
+		if (args[0] in this.channels)
+			this.channels[channel](type, args.slice(1))
 	}
 }
 
@@ -99,17 +100,110 @@ RPCaller.prototype = {
 	priv: function name (user, msg, cb) { this.rpc("name", [user, msg], cb) },
 	join: function join (channel, cb) { this.rpc("join", [channel], cb) },
 	part: function part (channel, cb) { this.rpc("part", [channel], cb) },
-	chat: function chat (channel, msg, cb) { this.rpc("chat", [channel, msg], cb)},
+	chat: function chat (channel, msg, cb) { this.rpc("chat", [channel, msg], cb) },
 	name: function name (name, cb) { this.rpc("name", [name], cb) },
 }
 
-function TabBar () {}
-TabBar.prototype = {}
+function TabBar () {
+	this.tabbarelem = document.getElementById("tabbar")
+	this.chatareaelem = document.getElementById("chatarea")
+	this.tabs = []
+	this.currenttab = null
+}
+TabBar.prototype = {
+	next: function next() {
+		this.hidetab(this.currenttab)
+		this.cycletab(true)
+		this.showtab(this.curernttab)
+	},
+	prev: function prev() {
+		this.hidetab(this.currenttab)
+		this.cycletab(false)
+		this.showtab(this.curernttab)
+	},
+	hidetab: function hidetab (id) { this.tabs[id].hide() },
+	showtab: function showtab (id) { this.tabs[id].show() },
+	cycletab: function cycletab (clockwise) {
+		if (clockwise) {
+			if (this.currenttab + 1 < this.tabs.length) this.currenttab++
+			else this.currenttab = 0
+		} else {
+			if (this.currenttab - 1 > 0) this.currenttab--
+			else this.currentab = this.tabs.length - 1
+		}
+	},
+	addtab: function addtab (name) {
+		var tab = new ChatTab()
+		this.tabs.push(tab)
+		this.chatareaelem.appendChild(tab.viewelem)
+		this.tabbarelem.appendChild(tab.tabelem)
+	},
+	closetab: function closetab () {
+		this.tabs[this.currenttab].close()
+		this.tabs.splice(this.currenttab, 1)
+		if (this.currenttab >= this.tabs.length) this.currenttab = 0
+		this.showtab(this.currenttab)
+	}
+}
 
-function ChatTab () {}
-ChatTab.prototype = {}
+function ChatTab (name) {
+	var tpl = document.getElementById("tab")
+	var spanelem = tpl.content.querySelector(".tab")
+	spanelem.textContent = name
+	var clone = document.importNode(tpl.content, true)
+	this.tabelem = clone
 
-function TextArea () {}
+	var tpl = document.getElementById("chaview")
+	var sectionelem = tpl.content.querySelector(".chatview")
+	var clone = document.importNode(tpl.content, true)
+	this.viewelem = clone
+
+	this.text = ""
+}
+ChatTab.prototype = {
+	hide: function hide() {
+		this.tabelem.className = ""
+		this.viewelem.style.display = "none"
+	},
+	show: function show() {
+		this.tabelem.className = "active"
+		this.viewelem.style.display = "initial"
+	},
+	close: function close() {
+		this.tabelem.remove()
+		this.viewelem.remove()
+	},
+	add_message: function add_message (name, text) {
+		// TODO
+	},
+	add_join: function add_join (name) {
+		// TODO
+	},
+	add_part: function add_part (name) {
+		// TODO
+	},
+	channel_subscriber: function channel_subscriber (type, args) {
+		switch(type) {
+			case "chat":
+				add_message(args[0], args[1])
+				break
+			case "join":
+				add_join(args[0])
+				break
+			case "part":
+				add_part(args[0])
+				break
+			default:
+				console.log("No case for this channel message type:", type)
+				break
+		}
+	},
+}
+
+function TextArea () {
+	this.elem = document.getElementById("textarea")
+	// TODO
+}
 TextArea.prototype = {}
 
 function main() {
