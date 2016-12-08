@@ -1,181 +1,195 @@
+// jshint asi: true
+// jshint browser: true
+function main() {
 "use strict"
-
 var CONNECTSTRING = "ws://localhost:50000"
 
 function empty_object_p(obj) {
 	return (typeof(obj) === "object" && Object.keys(obj).length === 0)
 }
 
-function WSDistributor () {
-	this.returnpub = new ReturnPublisher()
-	this.chanpub = new ChannelPublisher()
-	this.privpub = new PrivPublisher()
-}
-WSDistributor.prototype = {
-	distribute: function distribute (event) {
-		var obj
-		try {
-			obj = JSON.parse(event.data)
-		} catch (err) {
-			return console.log("JSON parsing error:", err.message)
-		}
-		switch(obj.fn) {
-			case "ret":
-				this.returnpub.publish(obj.args[0], obj.args[1], obj.args[2])
-				break
-			case "priv":
-				this.privpub.publish(obj.args[0], obj.args[1])
-				break
-			case "chat":
-				this.chanpub.publish("chat", obj.args)
-				break
-			case "join":
-				this.chanpub.publish("join", obj.args)
-				break
-			case "part":
-				this.chanpub.publish("part", obj.args)
-				break
-		}
-	},
-}
-
-function ReturnPublisher () {
-	this.ids = {}
-	this.lastid = null
-}
-
-function ChannelPublisher () {
-	this.channels = {}
-}
-ChannelPublisher.prototype = {
-	subscribe: function (channel, cb) { this.channels[channel] = cb }
-	unsubscribe: function (channel) { delete this.channels[channel] }
-	publish: function (type, args) {
-		if (args[0] in this.channels)
-			this.channels[channel](type, args.slice(1))
+function ws_distribute (event) {
+	var obj
+	try {
+		obj = JSON.parse(event.data)
+	} catch (err) {
+		return console.log("JSON parsing error:", err.message)
+	}
+	switch(obj.fn) {
+		case "ret":
+			ReturnSubject.fire(obj.args[0], obj.args[1], obj.args[2])
+			break
+		case "priv":
+			PrivSubject.fire(obj.args[0], obj.args[1])
+			break
+		case "chat":
+			ChannelSubject.fire("chat", obj.args)
+			break
+		case "join":
+			ChannelSubject.fire("join", obj.args)
+			break
+		case "part":
+			ChannelSubject.fire("part", obj.args)
+			break
 	}
 }
 
-function PrivPublisher () {
-	this.people = {}
-}
-PrivPublisher.prototype = {
-	subscribe: function (person, cb) { this.people[person] = cb }
-	unsubscribe: function (person) { delete this.people[person] }
-	publish: function (person, msg) {
-		if (person in this.people) this.people[person](msg)
-		else if (null in this.people) this.people[null](msg)
+var Templates = function(){
+	var elems = {
+		message: document.getElementById("message"),
+		tab: document.getElementById("tab"),
+		chatview: document.getElementById("chatview"),
 	}
-}
+	function message (name, text) {
+		// TODO
+	}
+	function tab (name) {
+		elems.tab.content.children[0].textContent = name
+		return document.importNode(elems.tab.content, true)
+	}
+	function chatview() {
+		return document.importNode(elems.chatview.content, true)
+	}
+	return {
+		message: message,
+		tab: tab,
+		chatview: chatview,
+	}
+}()
 
-ReturnPublisher.prototype = {
-	sensible_id: function sensible_id () {
-		if (empty_object_p(this.cbs)) {
-			this.lastid = 0
+var ReturnSubject = function () {
+	var ids = {}
+	var lastid = null
+	function sensible_id() {
+		if (empty_object_p(ids)) {
+			lastid = 0
 			return 0
-		} else return ++this.lastid
-	},
-	subscribe: function subscribe (id, cb) { this.cbs[id] = cb },
-	unsubscribe: function unsubscribe (id) { delete this.cbs[id] },
-	publish: function publish(id, ok, value) {
-		this.cbs[id](ok, value)
-		this.unsubscribe(id)
-	},
+		} else return ++lastid
+	}
+	function fire (id, ok, value) {
+		ids[id](ok, value)
+		unsubscribe(id)
+	}
+	function subscribe (id, cb) { ids[id] = cb }
+	function unsubscribe (id) { delete ids[id] }
+	return {
+		sensible_id: sensible_id,
+		fire: fire,
+		subscribe: subscribe,
+		unsubscribe: unsubscribe
+	}
+}()
+
+var ChannelSubject = function () {
+	var channels = {}
+	function subscribe (channel, cb) { channels[channel] = cb }
+	function unsubscribe (channel) { delete channels[channel] }
+	function fire (type, args) {
+		if (args[0] in channels)
+			channels[args[0]](type, args.slice(1))
+	}
+	return {
+		subscribe: subscribe,
+		unsubscribe: unsubscribe,
+		fire: fire
+	}
+}()
+
+var PrivSubject = function() {
+	var people = {}
+	function subscribe (person, cb) { people[person] = cb }
+	function unsubscribe (person) { delete people[person] }
+	function fire (person, msg) {
+		if (person in people) people[person](msg)
+		else if (null in people) people[null](msg)
+	}
 }
 
-function RPCaller (sendfn, publisher) {
-	this.send = sendfn
-	this.publisher = publisher
-}
-RPCaller.prototype = {
-	rpc: function rpc (fn, args, cb) {
-		var id = this.publisher.sensible_id()
-		this.send(JSON.stringify({
+var RPC = function () {
+	function rpc (fn, args, cb) {
+		var id = ReturnSubject.sensible_id()
+		ws.send(JSON.stringify({
 			fn: fn,
 			args: args,
 			id: id
 		}))
-		if (cb !== undefined) this.publisher.subscribe(id, cb)
-	},
-	priv: function name (user, msg, cb) { this.rpc("name", [user, msg], cb) },
-	join: function join (channel, cb) { this.rpc("join", [channel], cb) },
-	part: function part (channel, cb) { this.rpc("part", [channel], cb) },
-	chat: function chat (channel, msg, cb) { this.rpc("chat", [channel, msg], cb) },
-	name: function name (name, cb) { this.rpc("name", [name], cb) },
-}
-
-function TabBar (chanpub, textarea) {
-	this.chanpub = chanpub
-	this.textarea = textarea
-
-	this.tabbarelem = document.getElementById("tabbar")
-	this.chatareaelem = document.getElementById("chatarea")
-	this.tabs = []
-	this.currenttab = null
-}
-TabBar.prototype = {
-	next: function next() {
-		this.hidetab(this.currenttab)
-		this.cycletab(true)
-		this.showtab(this.curernttab)
-	},
-	prev: function prev() {
-		this.hidetab(this.currenttab)
-		this.cycletab(false)
-		this.showtab(this.curernttab)
-	},
-	hidetab: function hidetab (id) { this.tabs[id].hide() },
-	showtab: function showtab (id) { this.tabs[id].show() },
-	cycletab: function cycletab (clockwise) {
-		if (clockwise) {
-			if (this.currenttab + 1 < this.tabs.length) this.currenttab++
-			else this.currenttab = 0
-		} else {
-			if (this.currenttab - 1 > 0) this.currenttab--
-			else this.currentab = this.tabs.length - 1
-		}
-	},
-	addtab: function addtab (name) {
-		var tab = new ChatTab(name, textarea)
-		this.tabs.push(tab)
-		this.chatareaelem.appendChild(tab.viewelem)
-		this.tabbarelem.appendChild(tab.tabelem)
-	},
-	closetab: function closetab () {
-		this.tabs[this.currenttab].close()
-		this.tabs.splice(this.currenttab, 1)
-		if (this.currenttab >= this.tabs.length) this.currenttab = 0
-		this.showtab(this.currenttab)
+		if (cb !== undefined) ReturnSubject.subscribe(id, cb)
 	}
-}
+	function priv (user, msg, cb) { rpc("priv", [user, msg], cb) }
+	function join (channel, cb) { rpc("join", [channel], cb) }
+	function part (channel, cb) { rpc("part", [channel], cb) }
+	function chat (channel, msg, cb) { rpc("chat", [channel, msg], cb) }
+	function name (name, cb) { rpc("name", [name], cb) }
+	return {
+		priv: priv,
+		join: join,
+		part: part,
+		chat: chat,
+		name: name
+	}
+}()
 
-function ChatTab (name, textarea) {
+var Tabbar = function () {
+	var tabbarelem = document.getElementById("tabbar")
+	var chatareaelem = document.getElementById("chatarea")
+	var tabs = []
+	var current_tab = null
+
+	function next() {
+		hide_tab(current_tab)
+		cycle_tab(true)
+		show_tab(current_tab)
+	}
+	function prev() {
+		hide_tab(current_tab)
+		cycle_tab(false)
+		show_tab(current_tab)
+	}
+	function hide_tab (id) { tabs[id].hide() }
+	function show_tab (id) { tabs[id].show() }
+	function cycle_tab (clockwise) {
+		if (clockwise) {
+			if (current_tab + 1 < tabs.length) current_tab++
+			else current_tab = 0
+		} else {
+			if (current_tab - 1 > 0) current_tab--
+			else current_tab = tabs.length - 1
+		}
+	}
+	function add_tab (name) {
+		var tab = new ChatTab(name)
+		tabs.push(tab)
+		chatareaelem.appendChild(tab.viewelem)
+		tabbarelem.appendChild(tab.tabelem)
+		hide_tab(current_tab)
+		current_tab = tabs.length - 1
+		show_tab(current_tab)
+	}
+	function close_tab () {
+		tabs[current_tab].close()
+		tabs.splice(current_tab, 1)
+		if (current_tab >= tabs.length) current_tab = 0
+		show_tab(current_tab)
+	}
+}()
+
+function ChatTab (name) {
 	this.name = name
-	this.textarea = textarea
-
-	var tpl = document.getElementById("tab")
-	var spanelem = tpl.content.querySelector(".tab")
-	spanelem.textContent = name
-	var clone = document.importNode(tpl.content, true)
-	this.tabelem = clone
-
-	var tpl = document.getElementById("chaview")
-	var sectionelem = tpl.content.querySelector(".chatview")
-	var clone = document.importNode(tpl.content, true)
-	this.viewelem = clone
-
+	this.tabelem = Templates.tab(this.name)
+	this.viewelem = Templates.chatview()
 	this.text = ""
+	ChannelSubject.subscribe(this.name, this.observer.bind(this))
 }
 ChatTab.prototype = {
 	hide: function hide() {
-		this.text = this.textarea.elem.value
-		this.textarea.deregister()
+		this.text = TextArea.get_text()
+		TextArea.deregister()
 		this.tabelem.className = ""
 		this.viewelem.style.display = "none"
 	},
 	show: function show() {
-		if (this.text) this.textarea.elem.value = this.text
-		this.textarea.register(this)
+		if (this.text) TextArea.set_text(this.text)
+		TextArea.register(this.submit.bind(this))
 		this.tabelem.className = "active"
 		this.viewelem.style.display = "initial"
 	},
@@ -184,7 +198,8 @@ ChatTab.prototype = {
 		this.viewelem.remove()
 	},
 	add_message: function add_message (name, text) {
-		// TODO
+		var msg = Templates.message(name, text)
+		this.viewelem.appendChild(msg)
 	},
 	add_join: function add_join (name) {
 		// TODO
@@ -192,16 +207,16 @@ ChatTab.prototype = {
 	add_part: function add_part (name) {
 		// TODO
 	},
-	channel_subscriber: function channel_subscriber (type, args) {
+	observer: function observer (type, args) {
 		switch(type) {
 			case "chat":
-				add_message(args[0], args[1])
+				this.add_message(args[0], args[1])
 				break
 			case "join":
-				add_join(args[0])
+				this.add_join(args[0])
 				break
 			case "part":
-				add_part(args[0])
+				this.add_part(args[0])
 				break
 			default:
 				console.log("No case for this channel message type:", type)
@@ -209,29 +224,40 @@ ChatTab.prototype = {
 		}
 	},
 	submit: function submit (text) {
-		// RPC shit
+		RPC.chat(this.name, text)
 	},
 }
 
-function TextArea () {
-	this.tab = null
-	this.elem = document.getElementById("textarea")
-	this.elem.onkeypress = this.keypress.bind(this)
-}
-TextArea.prototype = {
-	register: function register (tab) { this.tab = tab },
-	deregister: function deregister () { this.tab = null },
-	keypress: function keypress (e) {
+var TextArea = function () {
+	var cb = null
+	var elem = document.getElementById("textarea")
+	elem.onkeypress = keypress(this)
+	function register (callback) { cb = callback }
+	function deregister () { cb = null }
+	function fire () {
+		if (cb !== null) cb(elem.value)
+		elem.value = ""
+	}
+	function keypress (e) {
 		if (e.keycode === 13) {
-			this.tab.submit(this.elem.value)
-			this.elem.value = ""
+			fire()
 			return false
 		} else { return true }
-	},
-}
+	}
+	function get_text () { return elem.value }
+	function set_text (text) { elem.value = text }
+	return {
+		register: register,
+		deregister: deregister,
+		fire: fire,
+		get_text: get_text,
+		set_text: set_text
+	}
+}()
 
-function main() {
-	// TODO
+var ws = new WebSocket(CONNECTSTRING)
+ws.onmessage = ws_distribute
+
 }
 
 window.onload = main
