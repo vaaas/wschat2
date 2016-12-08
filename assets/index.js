@@ -104,7 +104,10 @@ RPCaller.prototype = {
 	name: function name (name, cb) { this.rpc("name", [name], cb) },
 }
 
-function TabBar () {
+function TabBar (chanpub, textarea) {
+	this.chanpub = chanpub
+	this.textarea = textarea
+
 	this.tabbarelem = document.getElementById("tabbar")
 	this.chatareaelem = document.getElementById("chatarea")
 	this.tabs = []
@@ -133,7 +136,7 @@ TabBar.prototype = {
 		}
 	},
 	addtab: function addtab (name) {
-		var tab = new ChatTab()
+		var tab = new ChatTab(name, textarea)
 		this.tabs.push(tab)
 		this.chatareaelem.appendChild(tab.viewelem)
 		this.tabbarelem.appendChild(tab.tabelem)
@@ -146,7 +149,10 @@ TabBar.prototype = {
 	}
 }
 
-function ChatTab (name) {
+function ChatTab (name, textarea) {
+	this.name = name
+	this.textarea = textarea
+
 	var tpl = document.getElementById("tab")
 	var spanelem = tpl.content.querySelector(".tab")
 	spanelem.textContent = name
@@ -162,10 +168,14 @@ function ChatTab (name) {
 }
 ChatTab.prototype = {
 	hide: function hide() {
+		this.text = this.textarea.elem.value
+		this.textarea.deregister()
 		this.tabelem.className = ""
 		this.viewelem.style.display = "none"
 	},
 	show: function show() {
+		if (this.text) this.textarea.elem.value = this.text
+		this.textarea.register(this)
 		this.tabelem.className = "active"
 		this.viewelem.style.display = "initial"
 	},
@@ -198,13 +208,27 @@ ChatTab.prototype = {
 				break
 		}
 	},
+	submit: function submit (text) {
+		// RPC shit
+	},
 }
 
 function TextArea () {
+	this.tab = null
 	this.elem = document.getElementById("textarea")
-	// TODO
+	this.elem.onkeypress = this.keypress.bind(this)
 }
-TextArea.prototype = {}
+TextArea.prototype = {
+	register: function register (tab) { this.tab = tab },
+	deregister: function deregister () { this.tab = null },
+	keypress: function keypress (e) {
+		if (e.keycode === 13) {
+			this.tab.submit(this.elem.value)
+			this.elem.value = ""
+			return false
+		} else { return true }
+	},
+}
 
 function main() {
 	// TODO
