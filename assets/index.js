@@ -13,8 +13,9 @@ function ws_distribute (event) {
 	try {
 		obj = JSON.parse(event.data)
 	} catch (err) {
-		return console.log("JSON parsing error:", err.message)
+		return console.error("JSON parsing error:", err.message)
 	}
+	console.log(event.data)
 	switch(obj.fn) {
 		case "ret":
 			ReturnSubject.fire(obj.args[0], obj.args[1], obj.args[2])
@@ -37,21 +38,32 @@ function ws_distribute (event) {
 var Templates = function(){
 	var elems = {
 		message: document.getElementById("message"),
+		info: document.getElementById("info"),
 		tab: document.getElementById("tab"),
 		chatview: document.getElementById("chatview"),
 	}
 	function message (name, text) {
-		// TODO
+		var p = elems.message.content.children[0]
+		p.children[1].textContent = name
+		p.children[2].textContent = text
+		return document.importNode(elems.message.content, true)
+	}
+	function info (text) {
+		elems.info.content.children[0].textContent = text
+		return document.importNode(elems.info.content, true)
 	}
 	function tab (name) {
 		elems.tab.content.children[0].textContent = name
+		elems.tab.content.children[0].id = "tab_" + name
 		return document.importNode(elems.tab.content, true)
 	}
-	function chatview() {
+	function chatview(name) {
+		elems.chatview.content.children[0].id = "view_" + name
 		return document.importNode(elems.chatview.content, true)
 	}
 	return {
 		message: message,
+		info: info,
 		tab: tab,
 		chatview: chatview,
 	}
@@ -67,6 +79,7 @@ var ReturnSubject = function () {
 		} else return ++lastid
 	}
 	function fire (id, ok, value) {
+		if (ids[id] === undefined) return
 		ids[id](ok, value)
 		unsubscribe(id)
 	}
@@ -157,11 +170,11 @@ var Tabbar = function () {
 		}
 	}
 	function add_tab (name) {
+		chatareaelem.appendChild(Templates.chatview(name))
+		tabbarelem.appendChild(Templates.tab(name))
 		var tab = new ChatTab(name)
 		tabs.push(tab)
-		chatareaelem.appendChild(tab.viewelem)
-		tabbarelem.appendChild(tab.tabelem)
-		hide_tab(current_tab)
+		if (current_tab !== null) hide_tab(current_tab)
 		current_tab = tabs.length - 1
 		show_tab(current_tab)
 	}
@@ -171,12 +184,16 @@ var Tabbar = function () {
 		if (current_tab >= tabs.length) current_tab = 0
 		show_tab(current_tab)
 	}
+
+	return {
+		add_tab: add_tab,
+	}
 }()
 
 function ChatTab (name) {
 	this.name = name
-	this.tabelem = Templates.tab(this.name)
-	this.viewelem = Templates.chatview()
+	this.tabelem = document.getElementById("tab_" + name)
+	this.viewelem = document.getElementById("view_" + name)
 	this.text = ""
 	ChannelSubject.subscribe(this.name, this.observer.bind(this))
 }
@@ -191,7 +208,7 @@ ChatTab.prototype = {
 		if (this.text) TextArea.set_text(this.text)
 		TextArea.register(this.submit.bind(this))
 		this.tabelem.className = "active"
-		this.viewelem.style.display = "initial"
+		this.viewelem.style.display = "block"
 	},
 	close: function close() {
 		this.tabelem.remove()
@@ -199,13 +216,22 @@ ChatTab.prototype = {
 	},
 	add_message: function add_message (name, text) {
 		var msg = Templates.message(name, text)
-		this.viewelem.appendChild(msg)
+		this.add_elem(msg)
 	},
 	add_join: function add_join (name) {
-		// TODO
+		var msg = Templates.info(name + " has joined " + this.name)
+		this.add_elem(msg)
 	},
 	add_part: function add_part (name) {
-		// TODO
+		var msg = Templates.info(name + " has left " + this.name)
+		this.add_elem(msg)
+	},
+	add_elem: function (elem) {
+		this.viewelem.appendChild(elem)
+		if (this.viewelem.children.length > 200)
+			for (var i = 0; i < 100; i++)
+				this.viewelem.children[i].remove()
+		this.viewelem.children[this.viewelem.children.length-1].scrollIntoView()
 	},
 	observer: function observer (type, args) {
 		switch(type) {
@@ -219,7 +245,7 @@ ChatTab.prototype = {
 				this.add_part(args[0])
 				break
 			default:
-				console.log("No case for this channel message type:", type)
+				console.error("No case for this channel message type:", type)
 				break
 		}
 	},
@@ -231,7 +257,7 @@ ChatTab.prototype = {
 var TextArea = function () {
 	var cb = null
 	var elem = document.getElementById("textarea")
-	elem.onkeypress = keypress(this)
+	elem.onkeypress = keypress
 	function register (callback) { cb = callback }
 	function deregister () { cb = null }
 	function fire () {
@@ -239,7 +265,7 @@ var TextArea = function () {
 		elem.value = ""
 	}
 	function keypress (e) {
-		if (e.keycode === 13) {
+		if (e.keyCode === 13) {
 			fire()
 			return false
 		} else { return true }
@@ -255,8 +281,33 @@ var TextArea = function () {
 	}
 }()
 
+function quit (e) {
+	for (var i = 0; i < state.channels.length; i++)
+		RPC.part(state.channels[i])
+}
+
+var state = {
+	name: undefined,
+	channels: [],
+}
+
+var handshake = [
+	function(e) {
+		state.name = "dudeguy"
+		RPC.name(state.name, handshake[1])
+	},
+	function(e) {
+		state.channels.push("general")
+		RPC.join("general", handshake[2])
+	},
+	function(e) { Tabbar.add_tab("general") }
+]
+
 var ws = new WebSocket(CONNECTSTRING)
 ws.onmessage = ws_distribute
+ws.onopen = handshake[0]
+
+window.onunload = quit
 
 }
 

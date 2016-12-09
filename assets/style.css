@@ -9,10 +9,10 @@ body {
 	position: fixed;
 }
 #chatarea {
-	background-color: cyan;
 	width: 100%;
 	top: 2em;
 	bottom: 3em;
+	overflow: auto;
 }
 #textarea {
 	border: 1px solid black;
@@ -20,10 +20,28 @@ body {
 	bottom: 0;
 	height: 3em;
 }
-
 #tabbar {
 	top: 0;
 	height: 2em;
 	width: 100%;
-	background-color: pink;
+	background: red;
+}
+.chatview { padding: 0.5em; }
+p.message .username {
+	background-color: #7986cb;
+	border-radius: 0.5em;
+	color: white;
+	padding: 0.25em;
+	margin-right: 1em;
+}
+p.message .contents { font-family: sans-serif; }
+p.message {
+	margin: 0.5em 0;
+	line-height: 1.5em;
+}
+p.info {
+	color: #616161;
+	font-style: italic;
+	margin: 0.5em 0;
+	line-height: 1.5em;
 }

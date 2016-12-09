@@ -4,7 +4,7 @@ const uws = require("uws")
 const valid = require("./valid.js")
 
 module.exports = function WSServer (port, hostname) {
-	const channels = {}
+	const channels = { "general": true }
 	const names = {}
 	const rpcmap = {
 		chat: chat,
@@ -25,6 +25,7 @@ module.exports = function WSServer (port, hostname) {
 	}
 
 	function on_message (message) {
+		console.log(message)
 		var obj
 		try { 
 			obj = JSON.parse(message)
@@ -33,7 +34,7 @@ module.exports = function WSServer (port, hostname) {
 		}
 		if (!valid.RPC(obj))
 			this.close("Please don't send invalid RPCs")
-		else if (!(obj.fn in rpcmap)) {
+		else if (!(obj.fn in rpcmap))
 			this.close("Method doesn't exist")
 		else if (!valid[obj.fn](obj.args))
 			this.close("Invalid arguments")
@@ -46,61 +47,63 @@ module.exports = function WSServer (port, hostname) {
 	}
 
 	function broadcast (channel, what) {
-		for (let i = 0; i < server.clients.length; i++)
-			server.clients[i].send(what)
+		server.clients.forEach(client => {
+			client.send(what)
+		})
 	}
 
 	function chat (socket, id, channel, msg) {
-		if (!(socket.username && socket.channel))
-			socket.send(Message.ret(id, (false, "No username or channel")))
+		if (!(socket.username && channel in socket.channels))
+			socket.send(Message.ret(id, false, "No username or channel"))
 		else {
 			broadcast(channel, Message.chat(channel, socket.username, msg))
-			socket.send(Message.ret(id, (true, true)))
+			socket.send(Message.ret(id, true, true))
 		}
 	}
 
 	function name (socket, id, name) {
 		if (name in names)
-			socket.send(Message.ret(id, (false, "Name already taken")))
+			return socket.send(Message.ret(id, false, "Name already taken"))
 		else if (socket.username)
 			delete names[socket.username]
-		socket.username = this
-		socket.send(Message.ret(id, (true, true)))
+		socket.username = name
+		socket.send(Message.ret(id, true, true))
 	}
 
 	function join (socket, id, channel) {
 		if (!socket.username)
-			socket.send(Message.ret(id, (false, "No username set")))
+			socket.send(Message.ret(id, false, "No username set"))
 		else if (channel in socket.channels)
-			socket.send(Message.ret(id, (false, "Already in channel " + channel)))
+			socket.send(Message.ret(id, false, "Already in channel " + channel))
 		else if (!(channel in channels))
-			socket.send(Message.ret(id, (false, "Channel doesn't exist")))
+			socket.send(Message.ret(id, false, "Channel doesn't exist"))
 		else {
+			socket.channels[channel] = true
 			broadcast(channel, Message.join(channel, socket.username))
-			socket.send(Message.ret(id, (true, backlog())))
+			socket.send(Message.ret(id, true, backlog()))
 		}
 	}
 
 	function part (socket, id, channel) {
 		if (!socket.username)
-			socket.send(Message.ret(id, (false, "No username set")))
+			socket.send(Message.ret(id, false, "No username set"))
 		else if (!channel in socket.channels)
-			socket.send(Message.ret(id, (false, "Not in channel")))
+			socket.send(Message.ret(id, false, "Not in channel"))
 		else {
 			delete socket.channels[channel]
 			broadcast(channel, Message.part(channel, socket.username))
-			socket.send(Message.ret(id, (true, true)))
+			socket.send(Message.ret(id, true, true))
 		}
 	}
 
 	function priv (socket, id, user, msg) {
 		if (!socket.username)
-			socket.send(Message.ret(id, (false, "No username set")))
+			socket.send(Message.ret(id, false, "No username set"))
 		else if (!names[user])
-			socket.send(Message.ret(id, (false, "No such user")))
+			socket.send(Message.ret(id, false, "No such user"))
 		else {
 			names[user].send(Message.priv(socket.username, msg))
-			socket.send(Message.ret(id, (true, true)))
+			socket.send(Message.ret(id, true, true))
 		}
 	}
 }
@@ -110,7 +113,7 @@ class Message {
 		return JSON.stringify({
 			fn: "note",
 			args: [text]
-		})	}
+		})
 	}
 	static priv(username, text) {
 		return JSON.stringify({

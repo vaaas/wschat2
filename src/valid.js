@@ -23,7 +23,8 @@ module.exports = {
 		return (
 			args.length === 1 &&
 			typeof(args[0]) === "string" &&
-			args[0].length > 0
+			args[0].length > 0 &&
+			!/\s/.test(args[0])
 		)
 	},
 	join: function join (args) {
