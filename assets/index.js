@@ -8,33 +8,6 @@ function empty_object_p(obj) {
 	return (typeof(obj) === "object" && Object.keys(obj).length === 0)
 }
 
-function ws_distribute (event) {
-	var obj
-	try {
-		obj = JSON.parse(event.data)
-	} catch (err) {
-		return console.error("JSON parsing error:", err.message)
-	}
-	console.log(event.data)
-	switch(obj.fn) {
-		case "ret":
-			ReturnSubject.fire(obj.args[0], obj.args[1], obj.args[2])
-			break
-		case "priv":
-			PrivSubject.fire(obj.args[0], obj.args[1])
-			break
-		case "chat":
-			ChannelSubject.fire("chat", obj.args)
-			break
-		case "join":
-			ChannelSubject.fire("join", obj.args)
-			break
-		case "part":
-			ChannelSubject.fire("part", obj.args)
-			break
-	}
-}
-
 var Templates = function(){
 	var elems = {
 		message: document.getElementById("message"),
@@ -118,34 +91,11 @@ var PrivSubject = function() {
 	}
 }
 
-var RPC = function () {
-	function rpc (fn, args, cb) {
-		var id = ReturnSubject.sensible_id()
-		ws.send(JSON.stringify({
-			fn: fn,
-			args: args,
-			id: id
-		}))
-		if (cb !== undefined) ReturnSubject.subscribe(id, cb)
-	}
-	function priv (user, msg, cb) { rpc("priv", [user, msg], cb) }
-	function join (channel, cb) { rpc("join", [channel], cb) }
-	function part (channel, cb) { rpc("part", [channel], cb) }
-	function chat (channel, msg, cb) { rpc("chat", [channel, msg], cb) }
-	function name (name, cb) { rpc("name", [name], cb) }
-	return {
-		priv: priv,
-		join: join,
-		part: part,
-		chat: chat,
-		name: name
-	}
-}()
-
 var Tabbar = function () {
 	var tabbarelem = document.getElementById("tabbar")
 	var chatareaelem = document.getElementById("chatarea")
 	var tabs = []
+	var hash = {}
 	var current_tab = null
 
 	function next() {
@@ -158,8 +108,18 @@ var Tabbar = function () {
 		cycle_tab(false)
 		show_tab(current_tab)
 	}
-	function hide_tab (id) { tabs[id].hide() }
-	function show_tab (id) { tabs[id].show() }
+	function hide_tab (id) {
+		tabs[id].tab.className = ""
+		tabs[id].view.style.display = "none"
+		tabs[id].text = TextArea.get_text()
+		TextArea.deregister()
+	}
+	function show_tab (id) {
+		if (tabs[id].text) TextArea.set_text(tabs[id].text)
+		TextArea.register(tabs[id].name)
+		tabs[id].tab.className = "active"
+		tabs[id].view.style.display = "block"
+	}
 	function cycle_tab (clockwise) {
 		if (clockwise) {
 			if (current_tab + 1 < tabs.length) current_tab++
@@ -172,96 +132,63 @@ var Tabbar = function () {
 	function add_tab (name) {
 		chatareaelem.appendChild(Templates.chatview(name))
 		tabbarelem.appendChild(Templates.tab(name))
-		var tab = new ChatTab(name)
-		tabs.push(tab)
+		tabs.push({
+			tab: document.getElementById("tab_" + name),
+			view: document.getElementById("view_" + name),
+			name: name,
+		})
+		hash[name] = tabs.length - 1
 		if (current_tab !== null) hide_tab(current_tab)
-		current_tab = tabs.length - 1
+		current_tab = hash[name]
 		show_tab(current_tab)
 	}
-	function close_tab () {
-		tabs[current_tab].close()
-		tabs.splice(current_tab, 1)
-		if (current_tab >= tabs.length) current_tab = 0
-		show_tab(current_tab)
+	function close_tab (name) {
+		var id = hash[name]
+		tabs[id].tab.remove()
+		tabs[id].view.remove()
+		tabs.splice(id, 1)
+		delete hash[name]
+	}
+	function add_message (channel, name, text) {
+		var msg = Templates.message(name, text)
+		add_elem(channel, msg)
+	}
+	function add_join (channel, name) {
+		var msg = Templates.info(name + " has joined " + channel)
+		add_elem(channel, msg)
+	}
+	function add_part (channel, name) {
+		var msg = Templates.info(name + " has left " + channel)
+		add_elem(channel, msg)
+	}
+	function add_elem (channel, elem) {
+		var e = tabs[hash[channel]].view
+		e.appendChild(elem)
+		if (e.children.length > 200)
+			for (var i = 0; i < 100; i++)
+				e.children[i].remove()
+		e.children[e.children.length-1].scrollIntoView()
 	}
 
 	return {
 		add_tab: add_tab,
+		close_tab: close_tab,
+		add_message: add_message,
+		add_join: add_join,
+		add_elem: add_elem,
 	}
 }()
 
-function ChatTab (name) {
-	this.name = name
-	this.tabelem = document.getElementById("tab_" + name)
-	this.viewelem = document.getElementById("view_" + name)
-	this.text = ""
-	ChannelSubject.subscribe(this.name, this.observer.bind(this))
-}
-ChatTab.prototype = {
-	hide: function hide() {
-		this.text = TextArea.get_text()
-		TextArea.deregister()
-		this.tabelem.className = ""
-		this.viewelem.style.display = "none"
-	},
-	show: function show() {
-		if (this.text) TextArea.set_text(this.text)
-		TextArea.register(this.submit.bind(this))
-		this.tabelem.className = "active"
-		this.viewelem.style.display = "block"
-	},
-	close: function close() {
-		this.tabelem.remove()
-		this.viewelem.remove()
-	},
-	add_message: function add_message (name, text) {
-		var msg = Templates.message(name, text)
-		this.add_elem(msg)
-	},
-	add_join: function add_join (name) {
-		var msg = Templates.info(name + " has joined " + this.name)
-		this.add_elem(msg)
-	},
-	add_part: function add_part (name) {
-		var msg = Templates.info(name + " has left " + this.name)
-		this.add_elem(msg)
-	},
-	add_elem: function (elem) {
-		this.viewelem.appendChild(elem)
-		if (this.viewelem.children.length > 200)
-			for (var i = 0; i < 100; i++)
-				this.viewelem.children[i].remove()
-		this.viewelem.children[this.viewelem.children.length-1].scrollIntoView()
-	},
-	observer: function observer (type, args) {
-		switch(type) {
-			case "chat":
-				this.add_message(args[0], args[1])
-				break
-			case "join":
-				this.add_join(args[0])
-				break
-			case "part":
-				this.add_part(args[0])
-				break
-			default:
-				console.error("No case for this channel message type:", type)
-				break
-		}
-	},
-	submit: function submit (text) {
-		RPC.chat(this.name, text)
-	},
-}
-
 var TextArea = function () {
-	var cb = null
+	var channel = ""
 	var elem = document.getElementById("textarea")
 	elem.onkeypress = keypress
-	function register (callback) { cb = callback }
-	function deregister () { cb = null }
+	function register (chn) {
+		channel = chn
+	}
+	function deregister () { channel = "" }
 	function fire () {
-		if (cb !== null) cb(elem.value)
+		if (channel) WSInterface.chat(channel, elem.value)
 		elem.value = ""
 	}
 	function keypress (e) {
@@ -281,33 +208,118 @@ var TextArea = function () {
 	}
 }()
 
-function quit (e) {
-	for (var i = 0; i < state.channels.length; i++)
-		RPC.part(state.channels[i])
-}
+var WSInterface = function () {
+	var state = {
+		name: undefined,
+		channels: []
+	}
+	var handshake = [
+		function(e) { name("dudeguy", handshake[1]) },
+		function(e) { join("general") },
+	]
+	var ws = new WebSocket(CONNECTSTRING)
+	ws.onmessage = ws_distribute
+	ws.onopen = handshake[0]
 
-var state = {
-	name: undefined,
-	channels: [],
-}
+	function rpc (fn, args, cb) {
+		var id = ReturnSubject.sensible_id()
+		ws.send(JSON.stringify({
+			fn: fn,
+			args: args,
+			id: id
+		}))
+		if (cb !== undefined) ReturnSubject.subscribe(id, cb)
+	}
+	function priv (user, msg, cb) { rpc("priv", [user, msg], cb) }
+	function join (channel, cb) {
+		rpc("join", [channel], function (ok, value) {
+			if (ok) {
+				state.channels.push(channel)
+				Tabbar.add_tab(channel)
+				ChannelSubject.subscribe(channel, channel_observer(channel))
+			}
+			if (cb) cb(ok, value)
+		})
+	}
+	function part (channel, cb) {
+		rpc("part", [channel], function (ok, value) {
+			if (ok) {
+				state.channels.slice(state.channels.indexOf(channel), 1)
+				Tabbar.close_tab(channel)
+				ChannelSubject.unsubscribe(channel)
+			}
+			if (cb) cb(ok, value)
+		})
+	}
+	function chat (channel, msg, cb) { rpc("chat", [channel, msg], cb) }
+	function name (name, cb) {
+		rpc("name", [name], function (ok, value) {
+			if (ok) state.name = name
+			if (cb) cb(ok, value)
+		})
+	}
 
-var handshake = [
-	function(e) {
-		state.name = "dudeguy"
-		RPC.name(state.name, handshake[1])
-	},
-	function(e) {
-		state.channels.push("general")
-		RPC.join("general", handshake[2])
-	},
-	function(e) { Tabbar.add_tab("general") }
-]
+	function quit (e) {
+		ws.close()
+		return true
+	}
 
-var ws = new WebSocket(CONNECTSTRING)
-ws.onmessage = ws_distribute
-ws.onopen = handshake[0]
+	function channel_observer (channel) {
+		return function (type, args) {
+			switch(type) {
+				case "chat":
+					Tabbar.add_message(channel, args[0], args[1])
+					break
+				case "join":
+					Tabbar.add_join(channel, args[0])
+					break
+				case "part":
+					Tabbar.add_part(channel, args[0])
+					break
+				default:
+					console.error("No case for this channel message type:", type)
+					break
+			}
+		}
+	}
 
-window.onunload = quit
+	function ws_distribute (event) {
+		var obj
+		try {
+			obj = JSON.parse(event.data)
+		} catch (err) {
+			return console.error("JSON parsing error:", err.message)
+		}
+		console.log(event.data)
+		switch(obj.fn) {
+			case "ret":
+				ReturnSubject.fire(obj.args[0], obj.args[1], obj.args[2])
+				break
+			case "priv":
+				PrivSubject.fire(obj.args[0], obj.args[1])
+				break
+			case "chat":
+				ChannelSubject.fire("chat", obj.args)
+				break
+			case "join":
+				ChannelSubject.fire("join", obj.args)
+				break
+			case "part":
+				ChannelSubject.fire("part", obj.args)
+				break
+		}
+	}
+	return {
+		priv: priv,
+		join: join,
+		part: part,
+		chat: chat,
+		name: name,
+		quit: quit,
+	}
+}()
+
+window.onunload = WSInterface.quit
 
 }
 

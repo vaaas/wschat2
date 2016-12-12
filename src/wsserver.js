@@ -20,6 +20,8 @@ module.exports = function WSServer (port, hostname) {
 
 	function on_connection (socket) {
 		socket.on("message", on_message)
+		socket.on("close", on_close)
+		socket.on("error", on_error)
 		socket.username = null
 		socket.channels = {}
 	}
@@ -40,6 +42,20 @@ module.exports = function WSServer (port, hostname) {
 			this.close("Invalid arguments")
 		else
 			rpcmap[obj.fn](this, obj.id, ...obj.args)
+	}
+
+	function on_close (code, message) {
+		for (channel in this.channels)
+			broadcast(channel, Message.part(channel, this.username))
+		delete names[this.username]
+	}
+
+	function on_error (error) {
+		for (channel in this.channels)
+			broadcast(channel, Message.part(channel, this.username))
+		this.close()
+		delete names[this.username]
+		console.error(error)
 	}
 
 	function backlog() {
