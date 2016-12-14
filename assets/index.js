@@ -14,6 +14,7 @@ var Templates = function(){
 		info: document.getElementById("info"),
 		tab: document.getElementById("tab"),
 		chatview: document.getElementById("chatview"),
+		namedialog: document.getElementById("namedialog"),
 	}
 	function message (name, text) {
 		var p = elems.message.content.children[0]
@@ -34,11 +35,15 @@ var Templates = function(){
 		elems.chatview.content.children[0].id = "view_" + name
 		return document.importNode(elems.chatview.content, true)
 	}
+	function namedialog() {
+		return document.importNode(elems.namedialog.content, true)
+	}
 	return {
 		message: message,
 		info: info,
 		tab: tab,
 		chatview: chatview,
+		namedialog: namedialog,
 	}
 }()
 
@@ -199,28 +204,47 @@ var TextArea = function () {
 	}
 	function get_text () { return elem.value }
 	function set_text (text) { elem.value = text }
+	function enable () { elem.disabled = false }
+	function disable () { elem.disabled = true }
 	return {
 		register: register,
 		deregister: deregister,
 		fire: fire,
 		get_text: get_text,
-		set_text: set_text
+		set_text: set_text,
+		enable: enable,
+		disable: disable,
 	}
 }()
+
+var dialog = {
+	name: function (cb) {
+		var elem = Templates.namedialog()
+		document.body.appendChild(elem)
+		elem = document.querySelector("form")
+		setTimeout(function () { elem.style.opacity = "1" }, 10)
+		elem.onsubmit = function () {
+			var text = elem.querySelector("input:first-child").value.trim()
+			if (text === "" || /\s/.test(text)) return false
+			else {
+				elem.remove()
+				cb(text)
+				return true
+			}
+		}
+	},
+}
 
 var WSInterface = function () {
 	var state = {
 		name: undefined,
 		channels: []
 	}
-	var handshake = [
-		function(e) { name("dudeguy", handshake[1]) },
-		function(e) { join("general") },
-	]
 	var ws = new WebSocket(CONNECTSTRING)
 	ws.onmessage = ws_distribute
-	ws.onopen = handshake[0]
+	ws.onopen = onopen
 
+	function onopen (e) { handshake[0]() }
 	function rpc (fn, args, cb) {
 		var id = ReturnSubject.sensible_id()
 		ws.send(JSON.stringify({
@@ -318,6 +342,13 @@ var WSInterface = function () {
 		quit: quit,
 	}
 }()
+
+var handshake = [
+	function(e) { dialog.name(handshake[1]) },
+	function(name) { WSInterface.name(name, handshake[2]) },
+	function(e) { WSInterface.join("general", handshake[3]) },
+	function(e) { TextArea.enable() },
+]
 
 window.onunload = WSInterface.quit
 

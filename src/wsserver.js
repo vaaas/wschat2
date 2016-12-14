@@ -45,13 +45,13 @@ module.exports = function WSServer (port, hostname) {
 	}
 
 	function on_close (code, message) {
-		for (channel in this.channels)
+		for (let channel in this.channels)
 			broadcast(channel, Message.part(channel, this.username))
 		delete names[this.username]
 	}
 
 	function on_error (error) {
-		for (channel in this.channels)
+		for (let channel in this.channels)
 			broadcast(channel, Message.part(channel, this.username))
 		this.close()
 		delete names[this.username]

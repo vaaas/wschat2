@@ -9,7 +9,7 @@
 <main>
 	<section id="tabbar"></section>
 	<section id="chatarea"></section>
-	<textarea id="textarea"></textarea>
+	<textarea id="textarea" disabled></textarea>
 </main>
 
 
@@ -31,6 +31,16 @@
 
 <template id="chatview">
 	<section class="chatview"></section>
+</template>
+
+<template id="namedialog">
+	<form class="dialog">
+		<div class="title">Enter your name</div>
+		<div class="items">
+			<input type="text">
+			<input type="submit" value="Submit">
+		</div>
+	</form>
 </template>
 
 <script src="index.js"></script>

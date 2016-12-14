@@ -20,6 +20,7 @@ body {
 	bottom: 0;
 	height: 3em;
 }
+textarea[disabled] { background: yellow; }
 #tabbar {
 	top: 0;
 	height: 2em;
@@ -44,4 +45,27 @@ p.info {
 	font-style: italic;
 	margin: 0.5em 0;
 	line-height: 1.5em;
+}
+.dialog {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	background: white;
+	border-radius: 2px;
+	border: 1px solid #999;
+	text-align: center;
+	box-shadow: 0 8px 16px #888;
+	opacity: 0;
+	transition: opacity 0.5s ease;
+}
+.dialog .title {
+	text-align: center;
+	border-bottom: 1px solid #999;
+	background: #eee;
+	padding: 1em;
+}
+.dialog .items {
+	padding: 1em;
+	white-space: nowrap;
 }
