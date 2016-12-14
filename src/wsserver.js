@@ -82,6 +82,7 @@ module.exports = function WSServer (port, hostname) {
 			return socket.send(Message.ret(id, false, "Name already taken"))
 		else if (socket.username)
 			delete names[socket.username]
+		names[name] = true
 		socket.username = name
 		socket.send(Message.ret(id, true, true))
 	}
