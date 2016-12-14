@@ -114,7 +114,7 @@ var Tabbar = function () {
 		show_tab(current_tab)
 	}
 	function hide_tab (id) {
-		tabs[id].tab.className = ""
+		tabs[id].tab.className = "tab"
 		tabs[id].view.style.display = "none"
 		tabs[id].text = TextArea.get_text()
 		TextArea.deregister()
@@ -122,7 +122,7 @@ var Tabbar = function () {
 	function show_tab (id) {
 		if (tabs[id].text) TextArea.set_text(tabs[id].text)
 		TextArea.register(tabs[id].name)
-		tabs[id].tab.className = "active"
+		tabs[id].tab.className = "tab active"
 		tabs[id].view.style.display = "block"
 	}
 	function cycle_tab (clockwise) {

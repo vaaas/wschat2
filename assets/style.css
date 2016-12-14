@@ -6,15 +6,14 @@ body {
 #chatarea, #textarea, #tabbar {
 	font-family: monospace;
 	font-size: 10pt;
-	position: fixed;
 }
 #chatarea {
 	width: 100%;
-	top: 2em;
-	bottom: 3em;
+	margin-bottom: 3em;
 	overflow: auto;
 }
 #textarea {
+	position: fixed;
 	border: 1px solid black;
 	width: 100%;
 	bottom: 0;
@@ -22,10 +21,22 @@ body {
 }
 textarea[disabled] { background: yellow; }
 #tabbar {
-	top: 0;
-	height: 2em;
 	width: 100%;
 	background: red;
+}
+.tab {
+	display: inline-block;
+	text-align: center;
+	padding: 1em;
+	background: #ddd;
+	color: #888;
+	border: 1px solid #ddd;
+	border-bottom: 4px solid #ddd;
+}
+.tab.active {
+	color: black;
+	background: white;
+	border-bottom: 4px solid #28F;
 }
 .chatview { padding: 0.5em; }
 p.message .username {
