@@ -1,15 +1,5 @@
 "use strict"
 module.exports = {
-	RPC: function RPC (obj) {
-		return (
-			obj.fn !== undefined &&
-			typeof(obj.fn) === "string" &&
-			obj.args !== undefined &&
-			obj.args instanceof Array &&
-			obj.id !== undefined &&
-			Number.isInteger(obj.id)
-		)
-	},
 	chat: function chat (args) {
 		return (
 			args.length === 2 &&
