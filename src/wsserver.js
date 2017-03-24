@@ -1,185 +1,104 @@
 "use strict"
+module.exports = server_factory
 
+const util = require("util")
 const uws = require("uws")
+const valid = require("./valid.js")
 
-function is_rpc (obj) {
-	return (
-		obj.fn !== undefined &&
-		typeof(obj.fn) === "string" &&
-		obj.args !== undefined &&
-		obj.args instanceof Array &&
-		obj.id !== undefined &&
-		Number.isInteger(obj.id)) }
+var server
+const channels = { "general": [] }
+const nicks = {}
 
-const channels = { "general": true }
-const names = {}
-const rpcmap = {
-	chat: chat,
-	name: name,
-	join: join,
-	part: part,
-	priv: priv,
-}
+function sensible_name() {
+	var n = ""+Math.floor(Math.random() * 1000000)
+	if (n in nicks) return sensible_name()
+	else return n }
 
-class Message {
-	static note(text) {
-		return JSON.stringify({
-			fn: "note",
-			args: [text]
-		})
-	}
-	static priv(username, text) {
-		return JSON.stringify({
-			fn: "priv",
-			args: [username, text]
-		})
-	}
-	static join(channel, username) {
-		return JSON.stringify({
-			fn: "join",
-			args: [channel, username]
-		})
-	}
-	static part(channel, username) {
-		return JSON.stringify({
-			fn: "part",
-			args: [channel, username]
-		})
-	}
-	static chat(channel, username, text) {
-		return JSON.stringify({
-			fn: "chat",
-			args: [channel, username, text]
-		})
-	}
-	static ret(id, ok, value) {
-		return JSON.stringify({
-			fn: "ret",
-			args: [id, ok, value]
-		})
-	}
-}
+function Message (fn, id=null, error, ...rest) {
+	var obj = { fn: fn, args: [error, ...rest] }
+	if (id) obj.id = id
+	return JSON.stringify(obj) }
 
-function chat (socket, id, channel, msg) {
-	if (!(socket.username && channel in socket.channels))
-		socket.send(Message.ret(id, false, "No username or channel"))
-	else {
-		broadcast(channel, Message.chat(channel, socket.username, msg))
-		socket.send(Message.ret(id, true, true))
-	}
-}
+const exposed = {
+	groupchat (socket, id, channel, msg) {
+		if (!(channel in socket.channels)) {
+			//remote.error(socket, id, "Channel '"+channel+"' doesn't exist")
+			//pass
+			return }
+		else channels.channel.forEach(s => {
+			remote.groupchat(s, channel, socket.nick, msg) })},
 
-function name (socket, id, name) {
-	if (name in names)
-		return socket.send(Message.ret(id, false, "Name already taken"))
-	else if (socket.username)
-		delete names[socket.username]
-	names[name] = true
-	socket.username = name
-	socket.send(Message.ret(id, true, true))
-}
+	nick (socket, id, thenick) {
+		if (thenick in nicks)
+			return remote.ret(socket, id, "Nick already taken", null)
+		else if (socket.nick)
+			delete nicks[socket.nick]
+		nicks[thenick] = socket
+		socket.nick = thenick
+		remote.ret(socket, id, null, true) },
 
-function join (socket, id, channel) {
-	if (!socket.username)
-		socket.send(Message.ret(id, false, "No username set"))
-	else if (channel in socket.channels)
-		socket.send(Message.ret(id, false, "Already in channel " + channel))
-	else if (!(channel in channels))
-		socket.send(Message.ret(id, false, "Channel doesn't exist"))
-	else {
-		socket.channels[channel] = true
-		broadcast(channel, Message.join(channel, socket.username))
-		socket.send(Message.ret(id, true, backlog()))
-	}
-}
+	join (socket, id, channel) {
+		if (channel in socket.channels)
+			remote.ret(socket, id, "Already in channel "+channel, null)
+		else if (!(channel in channels))
+			remote.ret(socket, id, "Channel doesn't exist", null)
+		else socket.channels[channel] = true },
 
-function part (socket, id, channel) {
-	if (!socket.username)
-		socket.send(Message.ret(id, false, "No username set"))
-	else if (!channel in socket.channels)
-		socket.send(Message.ret(id, false, "Not in channel"))
-	else {
-		delete socket.channels[channel]
-		broadcast(channel, Message.part(channel, socket.username))
-		socket.send(Message.ret(id, true, true))
-	}
-}
+	part (socket, id, channel) {
+		if (!(channel in socket.channels))
+			// remote.ret(socket, id, "Not in channel", null)
+			return
+		else delete socket.channels[channel] },
 
-function priv (socket, id, user, msg) {
-	if (!socket.username)
-		socket.send(Message.ret(id, false, "No username set"))
-	else if (!names[user])
-		socket.send(Message.ret(id, false, "No such user"))
-	else {
-		names[user].send(Message.priv(socket.username, msg))
-		socket.send(Message.ret(id, true, true))
-	}
-}
+	chat (socket, id, user, msg) {
+		if (!nicks[user])
+			//remote.ret(socket, id, "No such user", null)
+			return
+		else remote.chat(user, socket.nick, msg) }, }
 
-function backlog() {
-	return ["nothing yo"]
-}
+const remote = {
+	ret (socket, id, error, value) {
+		socket.send(Message("ret", id, error, value))},
+	groupchat (socket, channel, sender, text) {
+		socket.send(Message("groupchat", null, null, sender, text)},
+	chat (socket, sender, text) {
+		socket.send(Message("chat", null, null, sender, text))},
+	nick (socket, thenick) {
+		socket.send(Message("nick", null, null, thenick)) },}
 
-module.exports = class WSServer {
-	constructor (port, hostname, remote, exposed, valid) {
-		this.remote = remote_factory(remote)
-		this.returns = {}
-		this.exposed = exposed
-		this.valid = valid
-		this.server = new uws.Server({
-			port: port, host: hostname })
-		this.server.on("connection", s => { this.on_connection(s) })}
-	
-	remote_factory (names) {
-		const obj = {}
-		for (let i = 0, n = names[i]; i < names.length; i++) {
-			obj[n] = (socket, cb, ...args) => {
-				const id = this.sensible_id()
-				socket.send(JSON.stringify({
-					fn: n,
-					args: args,
-					id: id })
-				if (cb.constructor === Function)
-					this.returns[id] = cb }}}
+function server_factory (port, hostname) {
+	server = new uws.Server({ port: port, host: hostname })
+	server.on("connection", on_connection)
+	console.log(`Listening to connections on ${hostname}:${port}`)
+	return server }
 
-	on_connection (socket) {
-		socket.on("message", m => { this.on_message(socket, m) })
-		socket.on("close", (c, m) => { this.on_close(socket, c, m) })
-		socket.on("error", (e) => { this.on_error(socket, e) }) }
+function on_connection (socket) {
+	socket.on("message", on_message)
+	socket.on("close", on_close)
+	socket.on("error", on_error)
+	socket.nick = sensible_name()
+	remote.nick(socket, socket.nick)
+	console.log(util.inspect(socket, false, null)) }
 
-	on_message (socket, message) {
-		console.log(message)
-		var obj
-		try { 
-			obj = JSON.parse(message) }
-		catch (e) {
-			return socket.close("Please don't send invalid JSON") }
-		if (!is_rpc(obj))
-			socket.close("Please don't send invalid RPCs")
-		else if (!(obj.fn in this.exposed))
-			socket.close("Method doesn't exist")
-		else if (!valid[obj.fn](obj.args))
-			socket.close("Invalid arguments")
-		else
-			rpcmap[obj.fn](this, obj.id, ...obj.args) }
+function on_message (message) {
+	var obj
+	try { 
+		obj = JSON.parse(message) }
+	catch (e) {
+		return this.close("Please don't send invalid JSON") }
+	if (!valid.rpc(obj))
+		this.close("Please don't send invalid RPCs")
+	else if (!(obj.fn in exposed))
+		this.close("Method doesn't exist")
+	else if (!valid[obj.fn](obj.args))
+		this.close("Invalid arguments")
+	else
+		exposed[obj.fn](this, obj.id, ...obj.args) }
 
-	on_close (socket, code, message) {
-		for (let channel in socket.channels)
-			broadcast(channel, Message.part(channel, socket.username))
-		delete names[socket.username]
-	}
+function on_close (code, message) {
+	delete nicks[this.nick] }
 
-	on_error (socket, error) {
-		for (let channel in socket.channels)
-			broadcast(channel, Message.part(channel, socket.username))
-		socket.close()
-		delete names[socket.username]
-		console.error(error)
-	}
-
-	broadcast (channel, what) {
-		server.clients.forEach(client => {
-			client.send(what)
-		})
-	}
-}
+function on_error (socket, error) {
+	this.close()
+	delete nicks[this.nick]
+	console.error(error) }

@@ -347,8 +347,7 @@ var handshake = [
 	function(e) { dialog.name(handshake[1]) },
 	function(name) { WSInterface.name(name, handshake[2]) },
 	function(e) { WSInterface.join("general", handshake[3]) },
-	function(e) { TextArea.enable() },
-]
+	function(e) { TextArea.enable() }, ]
 
 window.onunload = WSInterface.quit
 
