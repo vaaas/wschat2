@@ -6,7 +6,7 @@ const uws = require("uws")
 const valid = require("./valid.js")
 
 var server
-const channels = { "general": [] }
+const channels = { "general": new Set() }
 const nicks = {}
 
 function sensible_name() {
@@ -14,18 +14,15 @@ function sensible_name() {
 	if (n in nicks) return sensible_name()
 	else return n }
 
-function Message (fn, id=null, error, ...rest) {
-	var obj = { fn: fn, args: [error, ...rest] }
-	if (id) obj.id = id
+function Message (fn, ...rest) {
+	var obj = { fn: fn, args: [...rest] }
 	return JSON.stringify(obj) }
 
 const exposed = {
 	groupchat (socket, id, channel, msg) {
 		if (!(channel in socket.channels)) {
-			//remote.error(socket, id, "Channel '"+channel+"' doesn't exist")
-			//pass
-			return }
-		else channels.channel.forEach(s => {
+			remote.ret(socket, id, "Channel '"+channel+"' doesn't exist", null) }
+		else channels[channel].forEach(s => {
 			remote.groupchat(s, channel, socket.nick, msg) })},
 
 	nick (socket, id, thenick) {
@@ -42,29 +39,35 @@ const exposed = {
 			remote.ret(socket, id, "Already in channel "+channel, null)
 		else if (!(channel in channels))
 			remote.ret(socket, id, "Channel doesn't exist", null)
-		else socket.channels[channel] = true },
+		else {
+			socket.channels[channel] = true
+			channels[channel].add(socket)
+			remote.ret(socket, id, null, true) }},
 
 	part (socket, id, channel) {
 		if (!(channel in socket.channels))
-			// remote.ret(socket, id, "Not in channel", null)
-			return
-		else delete socket.channels[channel] },
+			remote.ret(socket, id, "Not in channel", null)
+		else {
+			delete socket.channels[channel] }
+			remote.ret(socket, id, null, true) },
 
 	chat (socket, id, user, msg) {
-		if (!nicks[user])
+		if (!nicks[user]) return
 			//remote.ret(socket, id, "No such user", null)
-			return
 		else remote.chat(user, socket.nick, msg) }, }
 
 const remote = {
 	ret (socket, id, error, value) {
 		socket.send(Message("ret", id, error, value))},
+
 	groupchat (socket, channel, sender, text) {
-		socket.send(Message("groupchat", null, null, sender, text)},
+		socket.send(Message("groupchat", channel, sender, text))},
+
 	chat (socket, sender, text) {
-		socket.send(Message("chat", null, null, sender, text))},
+		socket.send(Message("chat", sender, text))},
+
 	nick (socket, thenick) {
-		socket.send(Message("nick", null, null, thenick)) },}
+		socket.send(Message("nick", thenick)) },}
 
 function server_factory (port, hostname) {
 	server = new uws.Server({ port: port, host: hostname })
@@ -76,11 +79,12 @@ function on_connection (socket) {
 	socket.on("message", on_message)
 	socket.on("close", on_close)
 	socket.on("error", on_error)
+	socket.channels = {}
 	socket.nick = sensible_name()
-	remote.nick(socket, socket.nick)
-	console.log(util.inspect(socket, false, null)) }
+	remote.nick(socket, socket.nick) }
 
 function on_message (message) {
+	console.log(message)
 	var obj
 	try { 
 		obj = JSON.parse(message) }

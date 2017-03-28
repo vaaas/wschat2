@@ -1,82 +1,58 @@
+html, body { height: 100%; }
 body {
-	height: 100%;
-	margin: 0;
-	padding: 0;
-}
-#chatarea, #textarea, #tabbar {
-	font-family: monospace;
+	position: relative;
 	font-size: 10pt;
-}
-#chatarea {
-	width: 100%;
-	margin-bottom: 3em;
-	overflow: auto;
-}
-#textarea {
-	position: fixed;
-	border: 1px solid black;
-	width: 100%;
-	bottom: 0;
-	height: 3em;
-}
-textarea[disabled] { background: yellow; }
-#tabbar {
-	width: 100%;
-	background: red;
-}
-.tab {
-	display: inline-block;
-	text-align: center;
-	padding: 1em;
-	background: #ddd;
-	color: #888;
-	border: 1px solid #ddd;
-	border-bottom: 4px solid #ddd;
-}
-.tab.active {
-	color: black;
-	background: white;
-	border-bottom: 4px solid #28F;
-}
-.chatview { padding: 0.5em; }
-p.message .username {
-	background-color: #7986cb;
-	border-radius: 0.5em;
+	margin: 0;
+	padding: 0; }
+
+p {
+	margin: 0.25em 0;
+	padding: 0;
+	line-height: 1.5em; }
+
+span.sender {
+	background: blue;
 	color: white;
-	padding: 0.25em;
+	padding: 0.125em 0.25em;
 	margin-right: 1em;
-}
-p.message .contents { font-family: sans-serif; }
-p.message {
-	margin: 0.5em 0;
-	line-height: 1.5em;
-}
-p.info {
-	color: #616161;
-	font-style: italic;
-	margin: 0.5em 0;
-	line-height: 1.5em;
-}
-.dialog {
+	border-radius: 0.5em; }
+
+#textarea {
+	font: inherit;
 	position: absolute;
-	left: 50%;
-	top: 50%;
-	transform: translate(-50%, -50%);
+	bottom: 0;
+	border: none;
+	padding: 0;
+	margin: 0;
+	width: 100%;
+	background: #ddd;
+	height: 4em; }
+
+#textarea:focus { background: white; }
+
+#chatarea {
+	position: absolute;
+	font: inherit;
+	top: 3em;
+	bottom: 4em;
+	left: 0;
+	width: 100%;
+	overflow: auto; }
+
+#tabbar {
+	font: inherit;
+	border-bottom: 0.125em solid grey;
+	background: #ddd;
+	height: 2.875em; }
+
+#tabbar > * {
+	text-align: center;
+	height: 2.5em;
+	line-height: 2.5em;
+	padding: 0 0.5em;
+	display: inline-block;
+	vertical-align: bottom; }
+
+#tabbar > *.active {
 	background: white;
-	border-radius: 2px;
-	border: 1px solid #999;
-	text-align: center;
-	box-shadow: 0 8px 16px #888;
-	opacity: 0;
-	transition: opacity 0.5s ease;
-}
-.dialog .title {
-	text-align: center;
-	border-bottom: 1px solid #999;
-	background: #eee;
-	padding: 1em;
-}
-.dialog .items {
-	padding: 1em;
-	white-space: nowrap;
-}
+	border-bottom: 0.375em solid blue; }
