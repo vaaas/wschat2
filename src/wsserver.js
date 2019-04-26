@@ -1,4 +1,3 @@
-"use strict"
 const ws = require("ws")
 const util = require("./util.js")
 const valid = require("./valid.js")
@@ -22,38 +21,27 @@ module.exports = function wss_server(port, hostname) {
 	const Message = (x, ...rest) => JSON.stringify({fn: x, args: rest})
 
 	function on_connection (socket) {
-		socket.on("message", on_message)
-		socket.on("close", on_close)
-		socket.on("error", on_error)
+		socket.on("message", on_message(socket))
+		socket.on("close", on_close(socket))
+		socket.on("error", on_error(socket))
 		socket.channels = new Set()
 		socket.nick = sensible_name()
 		send_nick(socket, socket.nick) }
 
-	function on_message (message) {
+	const on_message = socket => message => {
 		try {
-			const obj = parse_and_validate(message)
-			exposed.get(obj.fn)(this, obj.id, ...obj.args) }
+			const obj = valid.apply(message)
+			exposed.get(obj.fn)(socket, obj.id, ...obj.args) }
 		catch(e) {
-			this.close(e) }}
+			socket.close(e) }}
 
-	function on_close (code, message) {
-		nicks.delete(this.nick) }
+	const on_close = socket => (code, message) => {
+		nicks.delete(socket.nick) }
 
-	function on_error (socket, error) {
-		this.close()
-		nicks.delete(this.nick)
+	const on_error = socket => error => {
+		socket.close()
+		nicks.delete(socket.nick)
 		console.error(error) }
-
-	function parse_and_validate(string) {
-		let obj
-		try {
-			const obj = JSON.parse(string) }
-		catch (e) {
-			throw "don't send invalid JSON"
-		if (!valid.rpc(obj)) throw "don't send invalid RPCs"
-		else if (!exposed.has(obj.fn)) throw "method doesn't exist"
-		else if (!valid[obj.fn](obj.args)) throw "Invalid arguments"
-		else return obj }
 
 	const send_nick = (socket, nick) =>
 		socket.send(Message("nick", nick))
@@ -85,11 +73,11 @@ module.exports = function wss_server(port, hostname) {
 			return send_error(socket, id, "Nick already taken")
 		if (socket.nick)
 			nicks.delete(socket.nick)
-		nicks.set(nick) = socket
+		nicks.set(nick, socket)
 		socket.nick = nick
 		send_ok(socket, id, true) }
 
-	function recv_join(socket. id, channel) {
+	function recv_join(socket, id, channel) {
 		if (socket.channels.has(channel))
 			send_error(socket, id, `Already in channel ${channel}`)
 		else if (!channels.has(channel))
@@ -102,15 +90,15 @@ module.exports = function wss_server(port, hostname) {
 	function recv_part(socket, id, channel) {
 		if (!socket.channels.has(channel))
 			send_error(socket, id, "Not in channel")
-		else if (!channels.has(channel)
+		else if (!channels.has(channel))
 			send_error(socket, id, "Channel doesn't exist")
 		else {
 			socket.channels.delete(channel)
 			channels.get(channel).delete(socket)
-			send_ok(socket, id, true) }
+			send_ok(socket, id, true) }}
 
 	function recv_chat(socket, id, user, msg) {
-		if (!nicks.has(user)
+		if (!nicks.has(user))
 			send_error(socket, id, "No such user")
 		else send_chat(nicks.get(user), socket.nick, msg) }
 	
