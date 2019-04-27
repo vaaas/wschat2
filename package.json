@@ -1,0 +1,22 @@
+{
+	"name": "wschat2",
+	"version": "0.0.1",
+	"description": "websocket chat",
+	"main": "wschat.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/vaaas/wschat2.git"
+	},
+	"author": "Vas",
+	"license": "AGPL-3.0-or-later",
+	"bugs": {
+		"url": "https://github.com/vaaas/wschat2/issues"
+	},
+	"homepage": "https://github.com/vaaas/wschat2#readme",
+	"dependencies": {
+		"ws": "*"
+	}
+}

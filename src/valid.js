@@ -8,9 +8,9 @@ function apply(string) {
 		throw "don't send invalid JSON" }
 	if (!rpc(obj))
 		throw "don't send invalid RPCs"
-	else if (!exposed.has(obj.fn))
+	else if (!(obj.fn in exposed))
 		throw "method doesn't exist"
-	else if (!exposed.get(obj.fn)(obj.args))
+	else if (!exposed[obj.fn](obj.args))
 		throw "Invalid arguments"
 	else
 		return obj }
@@ -57,8 +57,6 @@ const ret = args => (
 	args.length === 2 &&
 	(typeof(args[0]) === "string" || typeof(args[0]) === null))
 
-const exposed = new Map(
-	[chat, groupchat, nick, join, part, ret]
-	.map(x => [x.name, true]))
+const exposed = { chat, groupchat, nick, join, part, ret }
 
 module.exports = { apply, rpc, groupchat, nick, join, part, chat, ret }
