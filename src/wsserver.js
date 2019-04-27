@@ -3,7 +3,7 @@ const util = require("./util.js")
 const valid = require("./valid.js")
 
 const channels = new Map()
-channels.add("general", new Set())
+channels.set("general", new Set())
 const nicks = new Map()
 
 function main(port, hostname) {
